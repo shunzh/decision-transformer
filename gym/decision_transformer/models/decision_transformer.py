@@ -86,6 +86,8 @@ class DecisionTransformer(TrajectoryModel):
         transformer_outputs = self.transformer(
             inputs_embeds=stacked_inputs,
             attention_mask=stacked_attention_mask,
+            output_attentions=True,
+            output_hidden_states=True,
         )
         x = transformer_outputs['last_hidden_state']
 
@@ -98,7 +100,11 @@ class DecisionTransformer(TrajectoryModel):
         state_preds = self.predict_state(x[:,2])    # predict next state given state and action
         action_preds = self.predict_action(x[:,1])  # predict next action given state
 
-        return state_preds, action_preds, return_preds
+        info = {}
+        info['last_attentions'] = transformer_outputs.attentions[-1]
+        info['hidden_states'] = transformer_outputs.hidden_states
+
+        return state_preds, action_preds, return_preds, info
 
     def get_action(self, states, actions, rewards, returns_to_go, timesteps, **kwargs):
         # we don't care about the past rewards in this model

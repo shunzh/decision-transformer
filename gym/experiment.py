@@ -13,6 +13,9 @@ from decision_transformer.models.decision_transformer import DecisionTransformer
 from decision_transformer.models.mlp_bc import MLPBCModel
 from decision_transformer.training.act_trainer import ActTrainer
 from decision_transformer.training.seq_trainer import SequenceTrainer
+import metaworld
+
+SKILL_LEARNING = '/Users/shun/workspace/skill_learning/decision-transformer/gym/'
 
 
 def discount_cumsum(x, gamma):
@@ -27,7 +30,7 @@ def experiment(
         exp_prefix,
         variant,
 ):
-    device = variant.get('device', 'cuda')
+    device = 'cpu' if not torch.cuda.is_available() else variant.get('device', 'cuda')
     log_to_wandb = variant.get('log_to_wandb', False)
 
     env_name, dataset = variant['env'], variant['dataset']
@@ -56,6 +59,16 @@ def experiment(
         max_ep_len = 100
         env_targets = [76, 40]
         scale = 10.
+    elif 'ML1-' in env_name:  # for metaworld environments, task ML1
+        task_name = 'pick-place-v2'
+        ml1 = metaworld.ML1(task_name, seed=1)  # Construct the benchmark, sampling tasks
+        env = ml1.train_classes[task_name]()  # Create an environment with task
+        task_idx = int(env_name.split('-')[-1])
+        task = ml1.train_tasks[task_idx]
+        env.set_task(task)  # Set task
+        max_ep_len = 100  # changed for pick and place
+        env_targets = [int(650)]
+        scale = 650.
     else:
         raise NotImplementedError
 
@@ -66,7 +79,13 @@ def experiment(
     act_dim = env.action_space.shape[0]
 
     # load dataset
-    dataset_path = f'data/{env_name}-{dataset}-v2.pkl'
+    if env_name in ['hopper', 'halfcheetah', 'walker2d', 'reacher2d']:
+        dataset_path = f'data/{env_name}-{dataset}-v2.pkl'
+    elif env_name.startswith('ML1-pick-place-v2'):
+        dataset_path = f'{SKILL_LEARNING}/data/metaworld/{env_name}.pkl'
+    else:
+        raise Exception(f'cannot find dataset for {env_name}')
+
     with open(dataset_path, 'rb') as f:
         trajectories = pickle.load(f)
 
