@@ -15,7 +15,7 @@ from decision_transformer.training.act_trainer import ActTrainer
 from decision_transformer.training.seq_trainer import SequenceTrainer
 import metaworld
 
-SKILL_LEARNING = '/Users/shun/workspace/skill_learning/decision-transformer/gym/'
+SKILL_LEARNING = '../../skill_learning/decision-transformer/gym/'
 
 
 def discount_cumsum(x, gamma):
@@ -30,8 +30,8 @@ def experiment(
         exp_prefix,
         variant,
 ):
-    device = 'cpu' if not torch.cuda.is_available() else variant.get('device', 'cuda')
     log_to_wandb = variant.get('log_to_wandb', False)
+    device = variant.get('device')
 
     env_name, dataset = variant['env'], variant['dataset']
     model_type = variant['model_type']
@@ -183,7 +183,7 @@ def experiment(
         return s, a, r, d, rtg, timesteps, mask
 
     def eval_episodes(target_rew):
-        def fn(model):
+        def fn(model, iter_num=0):
             returns, lengths = [], []
             for _ in range(num_eval_episodes):
                 with torch.no_grad():
@@ -200,6 +200,8 @@ def experiment(
                             state_mean=state_mean,
                             state_std=state_std,
                             device=device,
+                            iter_num=iter_num,
+                            episode_num=_,
                         )
                     else:
                         ret, length = evaluate_episode(
@@ -317,11 +319,14 @@ if __name__ == '__main__':
     parser.add_argument('--weight_decay', '-wd', type=float, default=1e-4)
     parser.add_argument('--warmup_steps', type=int, default=10000)
     parser.add_argument('--num_eval_episodes', type=int, default=100)
-    parser.add_argument('--max_iters', type=int, default=10)
-    parser.add_argument('--num_steps_per_iter', type=int, default=10000)
+    parser.add_argument('--max_iters', type=int, default=20)
+    parser.add_argument('--num_steps_per_iter', type=int, default=1000)
     parser.add_argument('--device', type=str, default='cuda')
     parser.add_argument('--log_to_wandb', '-w', type=bool, default=False)
     
     args = parser.parse_args()
+
+    # if cuda not available, use cpu
+    args.device = 'cpu' if not torch.cuda.is_available() else args.device
 
     experiment('gym-experiment', variant=vars(args))

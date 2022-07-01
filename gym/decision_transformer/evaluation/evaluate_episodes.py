@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import wandb
 
 
 def evaluate_episode(
@@ -74,6 +75,8 @@ def evaluate_episode_rtg(
         device='cuda',
         target_return=None,
         mode='normal',
+        iter_num=0,
+        episode_num=0,
     ):
 
     model.eval()
@@ -97,6 +100,7 @@ def evaluate_episode_rtg(
     timesteps = torch.tensor(0, device=device, dtype=torch.long).reshape(1, 1)
 
     sim_states = []
+    attentions = []
 
     episode_return, episode_length = 0, 0
     for t in range(max_ep_len):
@@ -105,7 +109,7 @@ def evaluate_episode_rtg(
         actions = torch.cat([actions, torch.zeros((1, act_dim), device=device)], dim=0)
         rewards = torch.cat([rewards, torch.zeros(1, device=device)])
 
-        action = model.get_action(
+        action, info = model.get_action(
             (states.to(dtype=torch.float32) - state_mean) / state_std,
             actions.to(dtype=torch.float32),
             rewards.to(dtype=torch.float32),
@@ -134,7 +138,20 @@ def evaluate_episode_rtg(
         episode_return += reward
         episode_length += 1
 
+        last_state_attns = info['last_attentions'][-1, 0, -1].detach().cpu().tolist()
+        attentions.append(last_state_attns)
+
         if done:
             break
+
+    # visualize rewards
+    rewards = rewards.detach().cpu().numpy()
+    reward_table = [[idx, reward] for idx, reward in enumerate(rewards)]
+    reward_table = wandb.Table(data=reward_table, columns=["time step", "reward"])
+    wandb.log({f'rewards/{iter_num}_{episode_num}': wandb.plot.line(reward_table, "time step", "reward")})
+
+    # visualize attentions when in evaluation
+    attentions = np.array(attentions).T
+    wandb.log({f'attentions/{iter_num}_{episode_num}': wandb.plots.HeatMap(list(range(max_ep_len)), list(range(60)), attentions, show_text=False)})
 
     return episode_return, episode_length

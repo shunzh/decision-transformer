@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import wandb
 
 from decision_transformer.training.trainer import Trainer
 
